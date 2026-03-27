@@ -1,16 +1,58 @@
-<DOCTYPE html>
-  <head>
-    <meta charset='utf-8'>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Game Locker</title>
-  </head>
-  <body>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-      body {
-        font-family: biome;
-        background-color: #074D85;
-        font: biome;
-        text-align: center;
-      }
+        body {
+            background-color: #0f172a; /* Deep navy/black */
+            color: #f8fafc;
+            font-family: 'Inter', sans-serif;
+        }
+        .glass {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
     </style>
-    <h1>Welcome to Game Locker</h1>
-  </body>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <header class="p-6 flex justify-between items-center border-b border-white/10">
+        <h1 class="text-2xl font-bold tracking-tighter text-indigo-400">GAME <span class="text-white">LOCKER</span></h1>
+        <button class="bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-lg text-sm font-medium transition">
+            + Add Game
+        </button>
+    </header>
+
+    <main class="flex-grow flex flex-col items-center justify-center p-6 text-center">
+        
+        <div class="glass w-24 h-24 rounded-2xl flex items-center justify-center mb-6 shadow-2xl">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+        </div>
+
+        <h2 class="text-3xl font-semibold mb-2">Your locker is empty</h2>
+        <p class="text-slate-400 max-w-sm">
+            It’s looking a bit quiet in here. Start by adding your favorite titles to keep them organized in one place.
+        </p>
+
+        <div class="mt-12 grid grid-cols-2 md:grid-cols-4 gap-6 opacity-20 pointer-events-none">
+            <div class="w-32 h-44 bg-slate-800 rounded-lg"></div>
+            <div class="w-32 h-44 bg-slate-800 rounded-lg"></div>
+            <div class="w-32 h-44 bg-slate-800 rounded-lg"></div>
+            <div class="w-32 h-44 bg-slate-800 rounded-lg"></div>
+        </div>
+    </main>
+
+    <footer class="p-6 border-t border-white/5 text-slate-500 text-xs flex justify-center gap-8">
+        <div>GAMES: <span class="text-white">0</span></div>
+        <div>STORAGE: <span class="text-white">0 GB</span></div>
+        <div>LAST UPDATED: <span class="text-white">JUST NOW</span></div>
+    </footer>
+
+</body>
+</html>
