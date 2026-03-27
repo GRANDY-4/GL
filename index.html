@@ -2,43 +2,48 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Game Locker | Stealth</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Locker v6 | In-Place</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background: #000; color: #fff; font-family: sans-serif; }
-        .game-btn { background: #111; border: 1px solid #333; transition: 0.2s; }
-        .game-btn:active { background: #222; transform: scale(0.98); }
+        body { background: #000; color: #fff; overflow-x: hidden; }
+        #game-runtime { 
+            display: none; position: fixed; inset: 0; 
+            background: #000; z-index: 9999; 
+            width: 100vw; height: 100vh; border: none;
+        }
     </style>
 </head>
 <body class="p-6">
 
-    <div class="max-w-md mx-auto">
-        <h1 class="text-2xl font-black mb-8 text-center text-indigo-500">GAME LOCKER <span class="text-white text-xs opacity-50">V5</span></h1>
+    <div id="ui-layer">
+        <h1 class="text-3xl font-black mb-8 text-indigo-500">GAME <span class="text-white">LOCKER</span></h1>
 
-        <div class="bg-zinc-900 p-4 rounded-2xl mb-6">
-            <p class="text-[10px] uppercase font-bold text-zinc-500 mb-2 tracking-widest">Manual Entry</p>
-            <input type="text" id="gName" placeholder="Game Title" class="w-full bg-black border border-zinc-800 p-3 rounded-lg mb-2 text-sm">
-            <textarea id="gCode" placeholder="Paste Game HTML/JS Code here..." class="w-full h-32 bg-black border border-zinc-800 p-3 rounded-lg text-xs font-mono mb-3"></textarea>
-            <button onclick="addGame()" class="w-full bg-indigo-600 py-3 rounded-lg font-bold">ADD TO LOCKER</button>
+        <div class="bg-zinc-900 p-5 rounded-3xl border border-zinc-800 mb-8">
+            <h2 class="text-xs font-bold uppercase text-zinc-500 mb-3">Add Game via Code</h2>
+            <input type="text" id="gName" placeholder="Name (e.g. Tetris)" class="w-full bg-black border border-zinc-800 p-3 rounded-xl mb-3">
+            <textarea id="gCode" placeholder="Paste all the HTML/JS/CSS code here..." class="w-full h-32 bg-black border border-zinc-800 p-3 rounded-xl text-xs font-mono mb-4"></textarea>
+            <button onclick="saveGame()" class="w-full bg-indigo-600 py-4 rounded-2xl font-black text-lg active:scale-95 transition">INSTALL GAME</button>
         </div>
 
-        <div id="locker-list" class="space-y-3">
+        <div id="library" class="grid grid-cols-2 gap-4">
             </div>
     </div>
 
-    <script>
-        let locker = JSON.parse(localStorage.getItem('stealth_locker')) || [];
+    <div id="game-runtime">
+        <button onclick="closeGame()" class="fixed top-4 right-4 z-[10000] bg-red-600/50 hover:bg-red-600 px-4 py-2 rounded-full font-bold text-xs">EXIT GAME</button>
+        <iframe id="game-frame" class="w-full h-full border-none"></iframe>
+    </div>
 
-        function addGame() {
+    <script>
+        let locker = JSON.parse(localStorage.getItem('v6_locker')) || [];
+
+        function saveGame() {
             const name = document.getElementById('gName').value;
             const code = document.getElementById('gCode').value;
-            
             if (name && code) {
-                // We store it as raw text first to avoid "Server/Blob" errors
                 locker.push({ name, code });
-                localStorage.setItem('stealth_locker', JSON.stringify(locker));
-                
+                localStorage.setItem('v6_locker', JSON.stringify(locker));
                 document.getElementById('gName').value = '';
                 document.getElementById('gCode').value = '';
                 render();
@@ -47,33 +52,40 @@
 
         function launch(index) {
             const game = locker[index];
-            
-            // BYPASS METHOD: DATA URI
-            // We don't use 'URL.createObjectURL' because iPads block it.
-            // We open a new window and document.write the code directly.
-            const win = window.open('', '_blank');
-            if (win) {
-                win.document.open();
-                win.document.write(game.code);
-                win.document.close();
-            } else {
-                alert("Pop-up blocked! Tap the 'Pop-up Blocked' icon in the URL bar and click 'Always Allow'.");
-            }
+            const runtime = document.getElementById('game-runtime');
+            const frame = document.getElementById('game-frame');
+
+            // We use 'srcdoc' which is a standard attribute for iframes.
+            // It runs the code INSIDE the current page, so no popup blocker is triggered.
+            frame.srcdoc = game.code;
+            runtime.style.display = 'block';
+            document.body.style.overflow = 'hidden'; // Stop the background from scrolling
+        }
+
+        function closeGame() {
+            const runtime = document.getElementById('game-runtime');
+            const frame = document.getElementById('game-frame');
+            frame.srcdoc = ''; // Kill the game
+            runtime.style.display = 'none';
+            document.body.style.overflow = 'auto';
         }
 
         function deleteGame(i, e) {
             e.stopPropagation();
-            locker.splice(i, 1);
-            localStorage.setItem('stealth_locker', JSON.stringify(locker));
-            render();
+            if(confirm("Delete this game?")) {
+                locker.splice(i, 1);
+                localStorage.setItem('v6_locker', JSON.stringify(locker));
+                render();
+            }
         }
 
         function render() {
-            const list = document.getElementById('locker-list');
-            list.innerHTML = locker.map((g, i) => `
-                <div onclick="launch(${i})" class="game-btn p-4 rounded-xl flex justify-between items-center cursor-pointer">
-                    <span class="font-bold">${g.name}</span>
-                    <button onclick="deleteGame(${i}, event)" class="text-zinc-600 hover:text-red-500 text-xs px-2">Delete</button>
+            const lib = document.getElementById('library');
+            lib.innerHTML = locker.map((g, i) => `
+                <div onclick="launch(${i})" class="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl text-center active:scale-95 transition">
+                    <div class="text-4xl mb-3">🎮</div>
+                    <div class="font-bold truncate">${g.name}</div>
+                    <button onclick="deleteGame(${i}, event)" class="mt-3 text-[10px] text-zinc-600 uppercase font-black">Remove</button>
                 </div>
             `).join('');
         }
