@@ -3,94 +3,112 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Locker v6 | In-Place</title>
+    <title>LaunchLocker</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background: #000; color: #fff; overflow-x: hidden; }
-        #game-runtime { 
-            display: none; position: fixed; inset: 0; 
-            background: #000; z-index: 9999; 
-            width: 100vw; height: 100vh; border: none;
-        }
+        body { background: #0a0a0c; color: #fff; font-family: 'Inter', sans-serif; overflow-x: hidden; }
+        .input-glow:focus { border-color: #6366f1; box-shadow: 0 0 15px rgba(99, 102, 241, 0.3); }
+        #game-runtime { display: none; position: fixed; inset: 0; background: #000; z-index: 9999; }
+        iframe { width: 100vw; height: 100vh; border: none; }
     </style>
 </head>
 <body class="p-6">
 
-    <div id="ui-layer">
-        <h1 class="text-3xl font-black mb-8 text-indigo-500">GAME <span class="text-white">LOCKER</span></h1>
-
-        <div class="bg-zinc-900 p-5 rounded-3xl border border-zinc-800 mb-8">
-            <h2 class="text-xs font-bold uppercase text-zinc-500 mb-3">Add Game via Code</h2>
-            <input type="text" id="gName" placeholder="Name (e.g. Tetris)" class="w-full bg-black border border-zinc-800 p-3 rounded-xl mb-3">
-            <textarea id="gCode" placeholder="Paste all the HTML/JS/CSS code here..." class="w-full h-32 bg-black border border-zinc-800 p-3 rounded-xl text-xs font-mono mb-4"></textarea>
-            <button onclick="saveGame()" class="w-full bg-indigo-600 py-4 rounded-2xl font-black text-lg active:scale-95 transition">INSTALL GAME</button>
+    <div id="main-menu" class="max-w-xl mx-auto mt-10">
+        <div class="text-center mb-12">
+            <h1 class="text-5xl font-black tracking-tighter text-indigo-500 italic">Launch<span class="text-white">Locker</span></h1>
+            <p class="text-zinc-500 mt-2 text-sm uppercase tracking-widest">URL-to-HTML Compiler Engine</p>
         </div>
 
-        <div id="library" class="grid grid-cols-2 gap-4">
+        <div class="bg-zinc-900/50 p-6 rounded-3xl border border-zinc-800 shadow-2xl">
+            <label class="block text-xs font-bold text-zinc-500 mb-2 ml-1 uppercase">Insert Game URL</label>
+            <input type="text" id="targetUrl" placeholder="https://example.com/game.html" 
+                   class="w-full bg-black border border-zinc-700 p-4 rounded-2xl mb-4 input-glow transition-all outline-none text-indigo-300">
+            
+            <button onclick="fetchAndCompile()" id="fetchBtn" class="w-full bg-indigo-600 py-4 rounded-2xl font-black text-lg active:scale-95 transition-all shadow-lg shadow-indigo-600/20">
+                FETCH & COMPILE
+            </button>
+        </div>
+
+        <div id="result-area" class="hidden mt-8 p-6 bg-zinc-900 border border-indigo-500/30 rounded-3xl animate-pulse">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h2 class="font-bold text-indigo-400">result.html</h2>
+                    <p class="text-xs text-zinc-500">Compilation Successful</p>
+                </div>
+                <button onclick="runResult()" class="bg-white text-black px-6 py-2 rounded-full font-bold hover:bg-indigo-400 transition">
+                    RUN NOW
+                </button>
             </div>
+        </div>
     </div>
 
     <div id="game-runtime">
-        <button onclick="closeGame()" class="fixed top-4 right-4 z-[10000] bg-red-600/50 hover:bg-red-600 px-4 py-2 rounded-full font-bold text-xs">EXIT GAME</button>
-        <iframe id="game-frame" class="w-full h-full border-none"></iframe>
+        <button onclick="closeGame()" class="fixed top-6 right-6 z-[10000] bg-white/10 backdrop-blur-md border border-white/20 px-6 py-2 rounded-full font-bold text-xs hover:bg-red-500 transition">
+            EXIT LAUNCHER
+        </button>
+        <iframe id="game-frame"></iframe>
     </div>
 
     <script>
-        let locker = JSON.parse(localStorage.getItem('v6_locker')) || [];
+        let compiledCode = "";
 
-        function saveGame() {
-            const name = document.getElementById('gName').value;
-            const code = document.getElementById('gCode').value;
-            if (name && code) {
-                locker.push({ name, code });
-                localStorage.setItem('v6_locker', JSON.stringify(locker));
-                document.getElementById('gName').value = '';
-                document.getElementById('gCode').value = '';
-                render();
+        async function fetchAndCompile() {
+            const url = document.getElementById('targetUrl').value;
+            const btn = document.getElementById('fetchBtn');
+            const resultArea = document.getElementById('result-area');
+
+            if (!url) return alert("Please enter a URL!");
+
+            btn.innerText = "BYPASSING CORS...";
+            btn.disabled = true;
+
+            try {
+                // We use a public CORS proxy to trick the school filter/browser security
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+                
+                const response = await fetch(proxyUrl);
+                const data = await response.json();
+                
+                if (data.contents) {
+                    compiledCode = data.contents;
+                    
+                    // Logic to automatically inject a 'Base' tag so images/links still work
+                    const baseTag = `<base href="${url}" target="_blank">`;
+                    if (compiledCode.includes('<head>')) {
+                        compiledCode = compiledCode.replace('<head>', `<head>${baseTag}`);
+                    } else {
+                        compiledCode = baseTag + compiledCode;
+                    }
+
+                    btn.innerText = "COMPILED!";
+                    resultArea.classList.remove('hidden');
+                } else {
+                    throw new Error("Invalid response");
+                }
+            } catch (err) {
+                alert("Error fetching URL. The site might be blocking proxies or the URL is incorrect.");
+                btn.innerText = "FETCH & COMPILE";
+                btn.disabled = false;
             }
         }
 
-        function launch(index) {
-            const game = locker[index];
+        function runResult() {
             const runtime = document.getElementById('game-runtime');
             const frame = document.getElementById('game-frame');
 
-            // We use 'srcdoc' which is a standard attribute for iframes.
-            // It runs the code INSIDE the current page, so no popup blocker is triggered.
-            frame.srcdoc = game.code;
+            frame.srcdoc = compiledCode;
             runtime.style.display = 'block';
-            document.body.style.overflow = 'hidden'; // Stop the background from scrolling
+            document.body.style.overflow = 'hidden';
         }
 
         function closeGame() {
-            const runtime = document.getElementById('game-runtime');
-            const frame = document.getElementById('game-frame');
-            frame.srcdoc = ''; // Kill the game
-            runtime.style.display = 'none';
+            document.getElementById('game-runtime').style.display = 'none';
+            document.getElementById('game-frame').srcdoc = '';
             document.body.style.overflow = 'auto';
+            document.getElementById('fetchBtn').disabled = false;
+            document.getElementById('fetchBtn').innerText = "FETCH & COMPILE";
         }
-
-        function deleteGame(i, e) {
-            e.stopPropagation();
-            if(confirm("Delete this game?")) {
-                locker.splice(i, 1);
-                localStorage.setItem('v6_locker', JSON.stringify(locker));
-                render();
-            }
-        }
-
-        function render() {
-            const lib = document.getElementById('library');
-            lib.innerHTML = locker.map((g, i) => `
-                <div onclick="launch(${i})" class="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl text-center active:scale-95 transition">
-                    <div class="text-4xl mb-3">🎮</div>
-                    <div class="font-bold truncate">${g.name}</div>
-                    <button onclick="deleteGame(${i}, event)" class="mt-3 text-[10px] text-zinc-600 uppercase font-black">Remove</button>
-                </div>
-            `).join('');
-        }
-
-        render();
     </script>
 </body>
 </html>
