@@ -2,138 +2,121 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Game Locker | Auto-Engine</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Game Locker | Bypass Edition</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
-        body { background: #050505; color: #fff; font-family: 'Inter', sans-serif; }
-        .game-card { background: #111; border: 1px solid #222; transition: 0.3s; }
-        .game-card:hover { border-color: #6366f1; transform: scale(1.02); }
-        .loading-shimmer { background: linear-gradient(90s, #111 25%, #222 50%, #111 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
-        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        body { background: #000; color: #fff; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
+        .card { background: #111; border: 1px solid #222; border-radius: 1rem; padding: 1rem; }
+        /* Fix for iPad touch scrolling */
+        .scroll-container { -webkit-overflow-scrolling: touch; }
     </style>
 </head>
-<body class="p-8">
+<body class="p-4 md:p-8">
 
-    <div class="max-w-6xl mx-auto">
-        <header class="flex justify-between items-center mb-12">
-            <h1 class="text-4xl font-black text-indigo-500 italic">LOCKER<span class="text-white">OS</span></h1>
-            <label class="bg-indigo-600 hover:bg-indigo-500 px-8 py-3 rounded-full font-bold cursor-pointer transition">
-                IMPORT ZIP / GAME
-                <input type="file" id="zipInput" class="hidden" accept=".zip,.html">
-            </label>
+    <div class="max-w-4xl mx-auto">
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10">
+            <h1 class="text-3xl font-black tracking-tighter text-indigo-500">GAME LOCKER</h1>
+            
+            <div class="flex gap-2 w-full md:w-auto">
+                <label class="flex-1 bg-indigo-600 px-4 py-3 rounded-xl font-bold text-center cursor-pointer active:scale-95 transition">
+                    SELECT ZIP
+                    <input type="file" id="zipInput" class="hidden" accept=".zip">
+                </label>
+                
+                <button onclick="toggleManual()" class="flex-1 bg-zinc-800 px-4 py-3 rounded-xl font-bold active:scale-95 transition">
+                    PASTE CODE
+                </button>
+            </div>
         </header>
 
-        <div id="status-bar" class="hidden mb-6 p-4 bg-indigo-900/20 border border-indigo-500/30 rounded-xl text-indigo-400 font-mono text-sm">
-            [SYS] Initializing Compiler...
-        </div>
-
-        <div id="library" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+        <div id="library" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             </div>
+    </div>
+
+    <div id="manualOverlay" class="fixed inset-0 bg-black/95 z-50 hidden p-6 overflow-y-auto">
+        <div class="max-w-xl mx-auto space-y-4">
+            <h2 class="text-2xl font-bold">Emergency Import</h2>
+            <p class="text-zinc-400 text-sm">If your iPad blocks the file picker, paste the HTML code of your game here.</p>
+            <input type="text" id="manualName" placeholder="Game Name" class="w-full bg-zinc-900 border border-zinc-700 p-4 rounded-xl">
+            <textarea id="manualCode" placeholder="Paste <html> code here..." class="w-full h-64 bg-zinc-900 border border-zinc-700 p-4 rounded-xl font-mono text-xs"></textarea>
+            <button onclick="importManual()" class="w-full bg-indigo-600 py-4 rounded-xl font-bold">SAVE & RUN</button>
+            <button onclick="toggleManual()" class="w-full py-2 text-zinc-500">Back</button>
+        </div>
     </div>
 
     <script>
         const zipInput = document.getElementById('zipInput');
-        const statusBar = document.getElementById('status-bar');
-        const libraryEl = document.getElementById('library');
+        let locker = JSON.parse(localStorage.getItem('ipad_locker_v4')) || [];
 
-        let locker = JSON.parse(localStorage.getItem('v3_locker')) || [];
-
+        // HANDLE ZIP UPLOAD
         zipInput.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
 
-            log(`Detecting format: ${file.name}`);
-            
-            if (file.name.endsWith('.html')) {
-                // Direct HTML Import
-                const reader = new FileReader();
-                reader.onload = (res) => saveToLocker(file.name, res.target.result);
-                reader.readAsText(file);
-            } else if (file.name.endsWith('.zip')) {
-                // ZIP Compilation
-                processZip(file);
+            const zip = new JSZip();
+            try {
+                const contents = await zip.loadAsync(file);
+                let html = ""; let js = ""; let css = "";
+
+                for (let path in contents.files) {
+                    const f = contents.files[path];
+                    if (path.endsWith('.html')) html = await f.async("string");
+                    if (path.endsWith('.js')) js += await f.async("string") + "\n";
+                    if (path.endsWith('.css')) css += await f.async("string") + "\n";
+                }
+
+                if (html) {
+                    const compiled = `<html><head><style>${css}</style></head><body>${html}<script>${js}<\/script></body></html>`;
+                    save(file.name.replace('.zip', ''), compiled);
+                } else {
+                    alert("No .html file found inside the zip!");
+                }
+            } catch (err) {
+                alert("Error reading zip. Might be corrupted or encrypted.");
             }
         });
 
-        async function processZip(file) {
-            log("Unzipping archive...");
-            const zip = new JSZip();
-            const contents = await zip.loadAsync(file);
-            
-            let htmlContent = "";
-            let jsContent = "";
-            let cssContent = "";
+        // HANDLE MANUAL PASTE
+        function toggleManual() { document.getElementById('manualOverlay').classList.toggle('hidden'); }
 
-            // SCANNERS: Find the entry points
-            for (let filename in contents.files) {
-                const fileData = contents.files[filename];
-                if (filename.endsWith('index.html') || filename.endsWith('.html')) {
-                    htmlContent = await fileData.async("string");
-                } else if (filename.endsWith('.js')) {
-                    jsContent += await fileData.async("string") + "\n";
-                } else if (filename.endsWith('.css')) {
-                    cssContent += await fileData.async("string") + "\n";
-                }
+        function importManual() {
+            const name = document.getElementById('manualName').value;
+            const code = document.getElementById('manualCode').value;
+            if (name && code) {
+                save(name, code);
+                toggleManual();
             }
-
-            if (!htmlContent) {
-                log("Error: No entry point (.html) found in ZIP.", true);
-                return;
-            }
-
-            log("Compiling assets into sandboxed runtime...");
-            
-            // Build the Final "Hidden" Runtime
-            const finalRuntime = `
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <style>${cssContent}</style>
-                </head>
-                <body>
-                    ${htmlContent}
-                    <script>${jsContent}<\/script>
-                </body>
-                </html>
-            `;
-
-            saveToLocker(file.name.replace('.zip', ''), finalRuntime);
         }
 
-        function saveToLocker(name, source) {
-            locker.push({ name, source: btoa(unescape(encodeURIComponent(source))) });
-            localStorage.setItem('v3_locker', JSON.stringify(locker));
-            log(`Success: ${name} added to library.`);
+        function save(name, code) {
+            locker.push({ name, code: btoa(unescape(encodeURIComponent(code))) });
+            localStorage.setItem('ipad_locker_v4', JSON.stringify(locker));
             render();
         }
 
         function launch(index) {
-            const game = locker[index];
-            const source = decodeURIComponent(escape(atob(game.source)));
-            const blob = new Blob([source], { type: 'text/html' });
+            const g = locker[index];
+            const code = decodeURIComponent(escape(atob(g.code)));
+            const blob = new Blob([code], { type: 'text/html' });
             const url = URL.createObjectURL(blob);
             window.open(url, '_blank');
         }
 
         function render() {
-            libraryEl.innerHTML = locker.map((g, i) => `
-                <div class="game-card p-4 rounded-2xl cursor-pointer" onclick="launch(${i})">
-                    <div class="aspect-square bg-zinc-900 rounded-xl mb-4 flex items-center justify-center text-4xl shadow-inner">
-                        🎮
+            const lib = document.getElementById('library');
+            lib.innerHTML = locker.map((g, i) => `
+                <div class="card flex flex-col items-center justify-center text-center gap-4 cursor-pointer hover:border-indigo-500" onclick="launch(${i})">
+                    <div class="w-16 h-16 bg-indigo-500/20 text-indigo-500 rounded-full flex items-center justify-center text-2xl font-bold">
+                        ${g.name[0].toUpperCase()}
                     </div>
-                    <div class="font-bold truncate text-center">${g.name}</div>
-                    <div class="text-[10px] text-zinc-500 text-center mt-2 tracking-widest uppercase font-black">Boot in New Tab</div>
+                    <div>
+                        <div class="font-bold">${g.name}</div>
+                        <div class="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">Compiled Logic</div>
+                    </div>
                 </div>
             `).join('');
-        }
-
-        function log(msg, isError = false) {
-            statusBar.classList.remove('hidden');
-            statusBar.innerText = `[SYS] ${msg}`;
-            if (isError) statusBar.classList.add('text-red-500');
-            setTimeout(() => statusBar.classList.add('hidden'), 4000);
         }
 
         render();
