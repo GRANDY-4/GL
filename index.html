@@ -3,111 +3,137 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Game Locker | Compiler Edition</title>
+    <title>Game Locker | Auto-Engine</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
-        body { background: #020617; color: white; font-family: 'Inter', sans-serif; }
-        .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
-        .loader { border-top-color: #6366f1; animation: spinner 1.5s linear infinite; }
-        @keyframes spinner { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        body { background: #050505; color: #fff; font-family: 'Inter', sans-serif; }
+        .game-card { background: #111; border: 1px solid #222; transition: 0.3s; }
+        .game-card:hover { border-color: #6366f1; transform: scale(1.02); }
+        .loading-shimmer { background: linear-gradient(90s, #111 25%, #222 50%, #111 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
     </style>
 </head>
-<body class="p-6">
+<body class="p-8">
 
-    <div class="max-w-5xl mx-auto">
+    <div class="max-w-6xl mx-auto">
         <header class="flex justify-between items-center mb-12">
-            <h1 class="text-3xl font-black tracking-tighter text-indigo-500 underline decoration-indigo-500/30">GAME<span class="text-white">LOCKER</span></h1>
-            <button onclick="openCompiler()" class="bg-indigo-600 hover:bg-indigo-500 px-6 py-2 rounded-lg font-bold transition shadow-lg shadow-indigo-500/30">
-                + COMPILE NEW GAME
-            </button>
+            <h1 class="text-4xl font-black text-indigo-500 italic">LOCKER<span class="text-white">OS</span></h1>
+            <label class="bg-indigo-600 hover:bg-indigo-500 px-8 py-3 rounded-full font-bold cursor-pointer transition">
+                IMPORT ZIP / GAME
+                <input type="file" id="zipInput" class="hidden" accept=".zip,.html">
+            </label>
         </header>
 
-        <div id="library" class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            </div>
-    </div>
-
-    <div id="compiler" class="fixed inset-0 bg-black/90 z-50 hidden flex items-center justify-center p-4">
-        <div class="glass max-w-2xl w-full p-8 rounded-3xl">
-            <h2 class="text-2xl font-bold mb-4">Game Source Compiler</h2>
-            <div class="space-y-4">
-                <input type="text" id="gName" placeholder="Game Title" class="w-full bg-slate-900 border border-white/10 p-3 rounded-lg focus:outline-none focus:border-indigo-500">
-                <textarea id="gHTML" placeholder="Paste HTML here..." class="w-full h-24 bg-slate-900 border border-white/10 p-3 rounded-lg font-mono text-xs"></textarea>
-                <textarea id="gJS" placeholder="Paste JavaScript (Logic) here..." class="w-full h-24 bg-slate-900 border border-white/10 p-3 rounded-lg font-mono text-xs"></textarea>
-                
-                <div id="loading" class="hidden flex items-center gap-3 text-indigo-400 font-bold">
-                    <div class="loader w-5 h-5 border-2 border-white/20 rounded-full"></div>
-                    Compiling dependencies...
-                </div>
-
-                <div class="flex gap-4">
-                    <button onclick="compileGame()" class="flex-1 bg-indigo-600 py-3 rounded-xl font-bold hover:bg-indigo-500">BUILD & ADD</button>
-                    <button onclick="closeCompiler()" class="flex-1 bg-slate-800 py-3 rounded-xl font-bold">CANCEL</button>
-                </div>
-            </div>
+        <div id="status-bar" class="hidden mb-6 p-4 bg-indigo-900/20 border border-indigo-500/30 rounded-xl text-indigo-400 font-mono text-sm">
+            [SYS] Initializing Compiler...
         </div>
+
+        <div id="library" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+            </div>
     </div>
 
     <script>
-        let library = JSON.parse(localStorage.getItem('compiled_locker')) || [];
+        const zipInput = document.getElementById('zipInput');
+        const statusBar = document.getElementById('status-bar');
+        const libraryEl = document.getElementById('library');
 
-        function openCompiler() { document.getElementById('compiler').classList.remove('hidden'); }
-        function closeCompiler() { document.getElementById('compiler').classList.add('hidden'); }
+        let locker = JSON.parse(localStorage.getItem('v3_locker')) || [];
 
-        function compileGame() {
-            const name = document.getElementById('gName').value;
-            const html = document.getElementById('gHTML').value;
-            const js = document.getElementById('gJS').value;
+        zipInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
 
-            if (!name || !html) return alert("Missing Game Data!");
+            log(`Detecting format: ${file.name}`);
+            
+            if (file.name.endsWith('.html')) {
+                // Direct HTML Import
+                const reader = new FileReader();
+                reader.onload = (res) => saveToLocker(file.name, res.target.result);
+                reader.readAsText(file);
+            } else if (file.name.endsWith('.zip')) {
+                // ZIP Compilation
+                processZip(file);
+            }
+        });
 
-            document.getElementById('loading').classList.remove('hidden');
+        async function processZip(file) {
+            log("Unzipping archive...");
+            const zip = new JSZip();
+            const contents = await zip.loadAsync(file);
+            
+            let htmlContent = "";
+            let jsContent = "";
+            let cssContent = "";
 
-            setTimeout(() => {
-                // The "Backend" secret: Wrapping the code into a standalone blob
-                const fullSource = `
-                    <html>
-                    <head>
-                        <title>${name}</title>
-                        <script src="https://cdn.tailwindcss.com"><\/script>
-                        <style>body{margin:0; background:#000; color:#fff; overflow:hidden;}</style>
-                    </head>
-                    <body>
-                        ${html}
-                        <script>${js}<\/script>
-                    </body>
-                    </html>
-                `;
+            // SCANNERS: Find the entry points
+            for (let filename in contents.files) {
+                const fileData = contents.files[filename];
+                if (filename.endsWith('index.html') || filename.endsWith('.html')) {
+                    htmlContent = await fileData.async("string");
+                } else if (filename.endsWith('.js')) {
+                    jsContent += await fileData.async("string") + "\n";
+                } else if (filename.endsWith('.css')) {
+                    cssContent += await fileData.async("string") + "\n";
+                }
+            }
 
-                library.push({ name: name, source: btoa(fullSource) }); // Encode to base64 to save in storage
-                localStorage.setItem('compiled_locker', JSON.stringify(library));
-                
-                document.getElementById('loading').classList.add('hidden');
-                closeCompiler();
-                render();
-            }, 1200);
+            if (!htmlContent) {
+                log("Error: No entry point (.html) found in ZIP.", true);
+                return;
+            }
+
+            log("Compiling assets into sandboxed runtime...");
+            
+            // Build the Final "Hidden" Runtime
+            const finalRuntime = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <style>${cssContent}</style>
+                </head>
+                <body>
+                    ${htmlContent}
+                    <script>${jsContent}<\/script>
+                </body>
+                </html>
+            `;
+
+            saveToLocker(file.name.replace('.zip', ''), finalRuntime);
         }
 
-        function runGame(index) {
-            const game = library[index];
-            const decodedSource = atob(game.source);
-            
-            // Create a temporary Blob URL (This is how Steam-like running works in browser)
-            const blob = new Blob([decodedSource], { type: 'text/html' });
+        function saveToLocker(name, source) {
+            locker.push({ name, source: btoa(unescape(encodeURIComponent(source))) });
+            localStorage.setItem('v3_locker', JSON.stringify(locker));
+            log(`Success: ${name} added to library.`);
+            render();
+        }
+
+        function launch(index) {
+            const game = locker[index];
+            const source = decodeURIComponent(escape(atob(game.source)));
+            const blob = new Blob([source], { type: 'text/html' });
             const url = URL.createObjectURL(blob);
-            
             window.open(url, '_blank');
         }
 
         function render() {
-            const lib = document.getElementById('library');
-            lib.innerHTML = library.map((g, i) => `
-                <div class="glass p-6 rounded-2xl group hover:bg-indigo-600/10 transition cursor-pointer" onclick="runGame(${i})">
-                    <div class="h-32 bg-slate-800 rounded-xl mb-4 flex items-center justify-center text-4xl group-hover:scale-110 transition">🕹️</div>
-                    <h3 class="font-bold text-xl">${g.name}</h3>
-                    <p class="text-xs text-slate-500 mt-1">Ready to Launch</p>
-                    <div class="mt-4 text-indigo-400 font-bold text-sm">RUN IN NEW TAB →</div>
+            libraryEl.innerHTML = locker.map((g, i) => `
+                <div class="game-card p-4 rounded-2xl cursor-pointer" onclick="launch(${i})">
+                    <div class="aspect-square bg-zinc-900 rounded-xl mb-4 flex items-center justify-center text-4xl shadow-inner">
+                        🎮
+                    </div>
+                    <div class="font-bold truncate text-center">${g.name}</div>
+                    <div class="text-[10px] text-zinc-500 text-center mt-2 tracking-widest uppercase font-black">Boot in New Tab</div>
                 </div>
             `).join('');
+        }
+
+        function log(msg, isError = false) {
+            statusBar.classList.remove('hidden');
+            statusBar.innerText = `[SYS] ${msg}`;
+            if (isError) statusBar.classList.add('text-red-500');
+            setTimeout(() => statusBar.classList.add('hidden'), 4000);
         }
 
         render();
